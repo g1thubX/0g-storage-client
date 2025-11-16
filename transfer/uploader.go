@@ -631,6 +631,45 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 	return receipt.TransactionHash, receipt, err
 }
 
+// EstimateFee estimates the protocol fee (in Wei) for uploading a single data item with given tags.
+// It uses the same Submission.Fee(pricePerSector) calculation as SubmitLogEntry.
+func (uploader *Uploader) EstimateFee(ctx context.Context, data core.IterableData, tags []byte) (*big.Int, error) {
+	flow := core.NewFlow(data, tags)
+	submission, err := flow.CreateSubmission()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to create flow submission for fee estimation")
+	}
+	pricePerSector, err := uploader.market.PricePerSector(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to read price per sector for fee estimation")
+	}
+	fee := submission.Fee(pricePerSector)
+	return fee, nil
+}
+
+// EstimateBatchFee estimates the total protocol fee (in Wei) for uploading multiple data items
+// with corresponding tags. The lengths of datas and tags must match.
+func (uploader *Uploader) EstimateBatchFee(ctx context.Context, datas []core.IterableData, tags [][]byte) (*big.Int, error) {
+	if len(datas) != len(tags) {
+		return nil, errors.New("datas and tags length mismatch")
+	}
+	pricePerSector, err := uploader.market.PricePerSector(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to read price per sector for batch fee estimation")
+	}
+	total := big.NewInt(0)
+	for i := 0; i < len(datas); i++ {
+		flow := core.NewFlow(datas[i], tags[i])
+		submission, err := flow.CreateSubmission()
+		if err != nil {
+			return nil, errors.WithMessagef(err, "Failed to create flow submission for fee estimation at index %d", i)
+		}
+		fee := submission.Fee(pricePerSector)
+		total = new(big.Int).Add(total, fee)
+	}
+	return total, nil
+}
+
 func (uploader *Uploader) ParseLogs(ctx context.Context, logs []*types.Log) ([]uint64, error) {
 	submits := make([]uint64, 0)
 	for _, log := range logs {
