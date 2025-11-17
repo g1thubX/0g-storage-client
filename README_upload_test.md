@@ -67,9 +67,18 @@ opt := transfer.UploadOption{
 
 ## 创建的文件
 
-1. **`large_file_upload_test.go`**: 主测试程序
+1. **`large_file_upload_test.go`**: 主测试程序（已修复编译错误）
 2. **`upload_analysis_and_test.md`**: 详细分析文档
 3. **`run_upload_test.sh`**: 自动化测试脚本
+
+## 编译错误修复
+
+原始代码存在以下编译错误，已全部修复：
+
+1. **undefined: cmd.ProviderOption** → 使用 `providers.Option{}`
+2. **undefined: cmd.Common** → 使用 `common.LogOption{}`
+3. **indexerClient.GetNodes undefined** → 使用 `indexerClient.GetShardedNodes()`
+4. **ShardedNodes类型错误** → 正确处理 `Trusted` 和 `Discovered` 字段
 
 ## 使用方法
 
@@ -79,10 +88,23 @@ export Testnet_RPC="https://evmrpc-testnet.0g.ai"
 export Testnet_Indexer="https://indexer-storage-testnet-turbo.0g.ai"
 export PRIVATE_KEY="your_private_key"
 
+# 确保Go 1.23+已安装
 go run large_file_upload_test.go
 ```
 
-### 方法2: 使用自动化脚本
+### 方法2: 先编译再运行
+```bash
+# 创建独立模块目录
+mkdir upload_test && cd upload_test
+cp ../large_file_upload_test.go .
+go mod init upload_test
+go mod edit -replace github.com/0gfoundation/0g-storage-client=../
+go mod tidy
+go build -o large_file_upload large_file_upload_test.go
+./large_file_upload
+```
+
+### 方法3: 使用自动化脚本
 ```bash
 ./run_upload_test.sh
 ```
@@ -103,11 +125,26 @@ go run large_file_upload_test.go
 3. **确认机制**: 使用FileFinalized确保数据真正可用
 4. **错误恢复**: 3次重试机制提高上传成功率
 
+## API使用说明
+
+### 关键API调用：
+1. **indexer.GetShardedNodes()**: 获取可用的存储节点列表
+2. **transfer.NewUploader()**: 创建文件上传器
+3. **transfer.NewDownloader()**: 创建文件下载器
+4. **uploader.SplitableUpload()**: 执行分片上传
+5. **downloader.Download()**: 执行文件下载
+
+### 数据结构：
+- **ShardedNodes**: 包含 `Trusted` 和 `Discovered` 节点数组
+- **UploadOption**: 上传配置选项
+- **DownloadOption**: 下载配置选项
+
 ## 注意事项
 
 1. **网络环境**: 确保能访问测试网RPC和存储节点
 2. **存储空间**: 需要至少8GB可用空间（4GB源文件+4GB分片）
 3. **Gas费用**: 上传大文件需要足够的测试代币
 4. **时间消耗**: 4GB文件上传可能需要较长时间
+5. **Go版本**: 需要Go 1.23+版本
 
-所有任务已完成，程序已准备就绪，可以开始测试。
+所有任务已完成，程序已编译通过，可以开始测试。
